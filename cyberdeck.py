@@ -145,12 +145,21 @@ WMO = {
 # ── scan banner ─────────────────────────────────────────────────────────
 def cmd_scan():
     header("NETWORK SCAN  ·  sim")
+    # use real local subnet if we can find it, else default
+    subnet = "192.168.1.0/24"
+    try:
+        import subprocess
+        ip = subprocess.check_output(["hostname", "-I"], text=True).split()[0]
+        parts = ip.split(".")
+        subnet = f"{parts[0]}.{parts[1]}.{parts[2]}.0/24"
+    except Exception:
+        pass
     ports = [21, 22, 25, 53, 80, 110, 143, 443, 445, 993, 995, 3306, 3389, 5432, 8080]
     open_ports = random.sample(ports, k=random.randint(3, 6))
     services = {21:"ftp",22:"ssh",25:"smtp",53:"dns",80:"http",110:"pop3",143:"imap",
                 443:"https",445:"smb",993:"imaps",995:"pop3s",3306:"mysql",3389:"rdp",
                 5432:"postgres",8080:"http-proxy"}
-    print(c(C.DIM, "  scanning 192.168.1.0/24 ..."))
+    print(c(C.DIM, f"  scanning {subnet} ..."))
     for p in sorted(ports):
         if p in open_ports:
             print(f"   {c(C.GREEN,'[+]')} {c(C.GREEN, str(p).rjust(5))}  open   {services.get(p,'?')}")
@@ -221,9 +230,14 @@ def cmd_whois():
         with sk.create_connection((domain, 443), timeout=8) as sock:
             with ctx.wrap_socket(sock, server_hostname=domain) as s:
                 cert = s.getpeercert()
-                for k, v in cert.get("subject", ()):
-                    if k == "commonName":
-                        print(c(C.GREEN, "  cert cn   : ") + str(v))
+                # subject is a list of RDN tuples: ((("commonName", "x"),),)
+                cn = ""
+                for rdn in cert.get("subject", ()):
+                    for k, v in rdn:
+                        if k == "commonName":
+                            cn = str(v)
+                if cn:
+                    print(c(C.GREEN, "  cert cn   : ") + cn)
                 if "notAfter" in cert:
                     print(c(C.GREEN, "  cert exp  : ") + cert["notAfter"])
                 issuer = ""
@@ -233,9 +247,8 @@ def cmd_whois():
                             issuer = str(v)
                 if issuer:
                     print(c(C.GREEN, "  cert ca   : ") + issuer)
-    except Exception as e:
-        print(c(C.YELLOW, "  tls       : ") + f"n/a ({e})")
-    print(c(C.DIM, "  (full whois: install `whois` and run: whois " + domain + ")"))
+    except Exception:
+        print(c(C.DIM, "  tls       : n/a"))
 
 # ── quotes ──────────────────────────────────────────────────────────────
 QUOTES = [
