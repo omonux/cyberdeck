@@ -1,0 +1,261 @@
+#!/usr/bin/env python3
+"""
+CYBERDECK — your terminal, but make it hacker.
+
+Zero-config hacker toolkit: live weather, IP recon, ASCII logo,
+scan banner, hacker quotes, system stats. One command. No deps.
+
+Usage:
+  cyberdeck              # full hacker mode (everything)
+  cyberdeck weather      # live weather for your IP
+  cyberdeck ip           # IP recon + geolocation
+  cyberdeck logo         # big ASCII CYBERDECK logo
+  cyberdeck scan         # fake network scan banner
+  cyberdeck quote        # random hacker quote
+  cyberdeck stats        # your machine stats
+  cyberdeck --help       # show commands
+"""
+
+import sys
+import os
+import socket
+import subprocess
+import random
+import platform
+import textwrap
+from datetime import datetime, timezone
+
+# ── colors ──────────────────────────────────────────────────────────────
+class C:
+    RESET  = "\033[0m"
+    BOLD   = "\033[1m"
+    DIM    = "\033[2m"
+    CYAN   = "\033[96m"
+    GREEN  = "\033[92m"
+    RED    = "\033[91m"
+    YELLOW = "\033[93m"
+    MAGENTA= "\033[95m"
+    BLUE   = "\033[94m"
+    WHITE  = "\033[97m"
+
+def no_color():
+    return os.environ.get("NO_COLOR") or not sys.stdout.isatty()
+
+def c(col, s):
+    return s if no_color() else f"{col}{s}{C.RESET}"
+
+def hr(ch="─", n=56):
+    print(c(C.DIM, ch * n))
+
+def header(title):
+    print()
+    print(c(C.CYAN, "┌" + "─" * 54 + "┐"))
+    print(c(C.CYAN, "│") + c(C.BOLD + C.CYAN, f"  {title:<50}") + c(C.CYAN, "│"))
+    print(c(C.CYAN, "└" + "─" * 54 + "┘"))
+
+def fetch(url, timeout=8):
+    import requests
+    return requests.get(url, timeout=timeout, headers={"User-Agent": "cyberdeck/1.0"})
+
+# ── logo ────────────────────────────────────────────────────────────────
+LOGO = r"""
+ ██████╗ ██████╗ ██████╗ ███████╗███╗   ██╗ ██████╗
+██╔════╝██╔═══██╗██╔══██╗██╔════╝████╗  ██║██╔═══██╗
+██║     ██║   ██║██║  ██║█████╗  ██╔██╗ ██║██║   ██║
+██║     ██║   ██║██║  ██║██╔══╝  ██║╚██╗██║██║   ██║
+╚██████╗╚██████╔╝██████╔╝███████╗██║ ╚████║╚██████╔╝
+ ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝ ╚═════╝
+"""
+
+def cmd_logo():
+    print(c(C.BOLD + C.CYAN, LOGO))
+    print(c(C.DIM, "   v1.0  ·  your terminal, but make it hacker"))
+
+# ── ip recon ────────────────────────────────────────────────────────────
+def get_public_ip():
+    try:
+        return fetch("https://api.ipify.org?format=json").json()["ip"]
+    except Exception:
+        try:
+            return fetch("https://ifconfig.co/ip").text.strip()
+        except Exception:
+            return "127.0.0.1"
+
+def cmd_ip():
+    header("IP RECON")
+    ip = get_public_ip()
+    print(c(C.GREEN, "  public ip : ") + ip)
+    try:
+        d = fetch(f"https://ipapi.co/{ip}/json/").json()
+        print(c(C.GREEN, "  city      : ") + str(d.get("city", "?")))
+        print(c(C.GREEN, "  region    : ") + str(d.get("region", "?")))
+        print(c(C.GREEN, "  country   : ") + str(d.get("country_name", "?")) + " " + str(d.get("country_code", "")))
+        print(c(C.GREEN, "  lat/long  : ") + f"{d.get('latitude','?')}, {d.get('longitude','?')}")
+        print(c(C.GREEN, "  org       : ") + str(d.get("org", "?")))
+        print(c(C.GREEN, "  timezone  : ") + str(d.get("timezone", "?")))
+    except Exception as e:
+        print(c(C.YELLOW, "  geo lookup : ") + f"unavailable ({e})")
+    # local
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        local = s.getsockname()[0]
+        s.close()
+        print(c(C.GREEN, "  local ip  : ") + local)
+    except Exception:
+        pass
+    print(c(C.DIM, "  scanned at: ") + datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"))
+
+# ── weather ─────────────────────────────────────────────────────────────
+def cmd_weather():
+    header("WEATHER  ·  live")
+    ip = get_public_ip()
+    try:
+        d = fetch(f"https://ipapi.co/{ip}/json/").json()
+        lat, lon = d.get("latitude"), d.get("longitude")
+        city = d.get("city", "your location")
+    except Exception:
+        lat, lon, city = 40.7128, -74.006, "New York (default)"
+    try:
+        w = fetch(f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true").json()
+        cw = w.get("current_weather", {})
+        temp = cw.get("temperature")
+        wind = cw.get("windspeed")
+        code = cw.get("weathercode")
+        desc = WMO.get(code, "unknown")
+        print(c(C.GREEN, "  location  : ") + f"{city} ({lat:.2f}, {lon:.2f})")
+        print(c(C.YELLOW, "  temperature: ") + f"{temp}°C")
+        print(c(C.CYAN, "  condition : ") + desc)
+        print(c(C.CYAN, "  wind      : ") + f"{wind} km/h")
+        print(c(C.DIM, "  source    : open-meteo.com"))
+    except Exception as e:
+        print(c(C.YELLOW, "  weather     : ") + f"unavailable ({e})")
+
+WMO = {
+    0: "clear sky", 1: "mainly clear", 2: "partly cloudy", 3: "overcast",
+    45: "fog", 48: "depositing rime fog", 51: "light drizzle", 53: "drizzle",
+    55: "dense drizzle", 56: "freezing drizzle", 57: "dense freezing drizzle",
+    61: "slight rain", 63: "rain", 65: "heavy rain", 66: "freezing rain",
+    67: "heavy freezing rain", 71: "slight snow", 73: "snow", 75: "heavy snow",
+    77: "snow grains", 80: "slight rain showers", 81: "rain showers",
+    82: "violent rain showers", 85: "slight snow showers", 86: "heavy snow showers",
+    95: "thunderstorm", 96: "thunderstorm w/ hail", 99: "thunderstorm w/ heavy hail",
+}
+
+# ── scan banner ─────────────────────────────────────────────────────────
+def cmd_scan():
+    header("NETWORK SCAN  ·  sim")
+    ports = [21, 22, 25, 53, 80, 110, 143, 443, 445, 993, 995, 3306, 3389, 5432, 8080]
+    open_ports = random.sample(ports, k=random.randint(3, 6))
+    services = {21:"ftp",22:"ssh",25:"smtp",53:"dns",80:"http",110:"pop3",143:"imap",
+                443:"https",445:"smb",993:"imaps",995:"pop3s",3306:"mysql",3389:"rdp",
+                5432:"postgres",8080:"http-proxy"}
+    print(c(C.DIM, "  scanning 192.168.1.0/24 ..."))
+    for p in sorted(ports):
+        if p in open_ports:
+            print(f"   {c(C.GREEN,'[+]')} {c(C.GREEN, str(p).rjust(5))}  open   {services.get(p,'?')}")
+        else:
+            print(f"   {c(C.DIM,'[-]')} {str(p).rjust(5)}  closed")
+    print()
+    print(c(C.BOLD + C.RED, f"  {len(open_ports)} open port(s) found. You've been seen."))
+
+# ── quotes ──────────────────────────────────────────────────────────────
+QUOTES = [
+    ("Everything fails all the time.", "Linus Torvalds"),
+    ("The internet is barely a glitch that constantly fixes itself.", "Andy Warhol"),
+    ("Paranoia is a feature, not a bug.", "— every sysadmin"),
+    ("It works on my machine.", "— a developer, somewhere"),
+    ("There are only two hard things in CS: cache invalidation and naming things.", "Phil Karlton"),
+    ("Talk is cheap. Show me the code.", "Linus Torvalds"),
+    ("99 little bugs in the code, 99 little bugs. Take one down, patch it around, 127 little bugs in the code.", "— folk song"),
+    ("The best way to predict the future is to invent it.", "Alan Kay"),
+    ("Simplicity is the soul of efficiency.", "Austin Freeman"),
+    ("First, solve the problem. Then, write the code.", "John Johnson"),
+    ("Code is like a joke; if you have to explain it, it's not that good.", "— unknown"),
+    ("A user interface is like a joke. If you have to explain it, it's not that good.", "Martin Maloney"),
+    ("The scariest moment is always just before you start.", "Stephen King"),
+    ("Done is better than perfect.", "Sheryl Sandberg"),
+    ("Make it work, make it right, make it fast.", "Kent Beck"),
+]
+
+def cmd_quote():
+    q, a = random.choice(QUOTES)
+    print()
+    print(c(C.MAGENTA, "  " + "❝") + c(C.WHITE, " " + q) + c(C.MAGENTA, " ❞"))
+    print(c(C.DIM, "     — " + a))
+    print()
+
+# ── stats ───────────────────────────────────────────────────────────────
+def cmd_stats():
+    header("SYSTEM  ·  your machine")
+    print(c(C.GREEN, "  os        : ") + platform.system() + " " + platform.release())
+    print(c(C.GREEN, "  arch      : ") + platform.machine())
+    print(c(C.GREEN, "  python    : ") + platform.python_version())
+    try:
+        hostname = socket.gethostname()
+        print(c(C.GREEN, "  hostname  : ") + hostname)
+    except Exception:
+        pass
+    # uptime
+    try:
+        with open("/proc/uptime") as f:
+            up = float(f.read().split()[0])
+            print(c(C.GREEN, "  uptime    : ") + f"{up/3600:.1f} hours")
+    except Exception:
+        pass
+    # cpu count
+    print(c(C.GREEN, "  cpus      : ") + str(os.cpu_count()))
+    # disk
+    try:
+        st = os.statvfs("/")
+        total = st.f_blocks * st.f_frsize
+        free = st.f_bavail * st.f_frsize
+        used = total - free
+        print(c(C.GREEN, "  disk /    : ") + f"{used/1e9:.1f}G used / {total/1e9:.1f}G total")
+    except Exception:
+        pass
+    print(c(C.DIM, "  whoami    : ") + os.environ.get("USER", "?"))
+
+# ── full mode ───────────────────────────────────────────────────────────
+def full():
+    cmd_logo()
+    cmd_quote()
+    cmd_stats()
+    cmd_ip()
+    cmd_weather()
+    cmd_scan()
+    print()
+    print(c(C.BOLD + C.GREEN, "  ═══ CYBERDECK online. You're invisible. ═══"))
+    print(c(C.DIM, "  run 'cyberdeck --help' for individual tools"))
+
+# ── main ────────────────────────────────────────────────────────────────
+COMMANDS = {
+    "weather": ("live weather for your IP", cmd_weather),
+    "ip": ("IP recon + geolocation", cmd_ip),
+    "logo": ("big ASCII logo", cmd_logo),
+    "scan": ("fake network scan banner", cmd_scan),
+    "quote": ("random hacker quote", cmd_quote),
+    "stats": ("your machine stats", cmd_stats),
+}
+
+def main():
+    args = sys.argv[1:]
+    if not args or args[0] in ("--full", "full"):
+        full()
+        return
+    cmd = args[0]
+    if cmd in ("--help", "-h", "help"):
+        print(c(C.BOLD + C.CYAN, "CYBERDECK — hacker terminal toolkit\n"))
+        print(c(C.WHITE, "  (no args)     full hacker mode\n"))
+        for name, (desc, _) in COMMANDS.items():
+            print(f"  {c(C.GREEN, name.ljust(10))} {desc}")
+        print(c(C.DIM, "\n  NO_COLOR=1 cyberdeck   disable colors"))
+        return
+    if cmd in COMMANDS:
+        COMMANDS[cmd][2 if False else 1]()
+        return
+    print(c(C.RED, f"  unknown command: {cmd}"))
+    print(c(C.DIM, "  run 'cyberdeck --help'"))
+
+if __name__ == "__main__":
+    main()
