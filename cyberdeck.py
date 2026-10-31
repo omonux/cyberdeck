@@ -81,18 +81,37 @@ def get_public_ip():
         except Exception:
             return "127.0.0.1"
 
+def _mask_ip(ip):
+    """Mask an IP for privacy: 102.88.113.181 → 102.88.***.***"""
+    parts = ip.split(".")
+    if len(parts) == 4:
+        return f"{parts[0]}.{parts[1]}.***.***"
+    return ip
+
+def _mask_coord(val, decimals=1):
+    """Reduce coordinate precision so you can't be pinpointed."""
+    try:
+        return f"{float(val):.{decimals}f}"
+    except (ValueError, TypeError):
+        return "?"
+
 def cmd_ip():
+    private = os.environ.get("CYBERDECK_PRIVATE", "") == "1"
     header("IP RECON")
     ip = get_public_ip()
-    print(c(C.GREEN, "  public ip : ") + ip)
+    print(c(C.GREEN, "  public ip : ") + (_mask_ip(ip) if private else ip))
     try:
         d = fetch(f"https://ipapi.co/{ip}/json/").json()
-        print(c(C.GREEN, "  city      : ") + str(d.get("city", "?")))
-        print(c(C.GREEN, "  region    : ") + str(d.get("region", "?")))
-        print(c(C.GREEN, "  country   : ") + str(d.get("country_name", "?")) + " " + str(d.get("country_code", "")))
-        print(c(C.GREEN, "  lat/long  : ") + f"{d.get('latitude','?')}, {d.get('longitude','?')}")
-        print(c(C.GREEN, "  org       : ") + str(d.get("org", "?")))
-        print(c(C.GREEN, "  timezone  : ") + str(d.get("timezone", "?")))
+        if private:
+            print(c(C.GREEN, "  country   : ") + str(d.get("country_name", "?")) + " " + str(d.get("country_code", "")))
+            print(c(C.GREEN, "  region    : ") + str(d.get("region", "?")))
+        else:
+            print(c(C.GREEN, "  city      : ") + str(d.get("city", "?")))
+            print(c(C.GREEN, "  region    : ") + str(d.get("region", "?")))
+            print(c(C.GREEN, "  country   : ") + str(d.get("country_name", "?")) + " " + str(d.get("country_code", "")))
+            print(c(C.GREEN, "  lat/long  : ") + f"{d.get('latitude','?')}, {d.get('longitude','?')}")
+            print(c(C.GREEN, "  org       : ") + str(d.get("org", "?")))
+            print(c(C.GREEN, "  timezone  : ") + str(d.get("timezone", "?")))
     except Exception as e:
         print(c(C.YELLOW, "  geo lookup : ") + f"unavailable ({e})")
     # local
@@ -101,21 +120,25 @@ def cmd_ip():
         s.connect(("8.8.8.8", 80))
         local = s.getsockname()[0]
         s.close()
-        print(c(C.GREEN, "  local ip  : ") + local)
+        print(c(C.GREEN, "  local ip  : ") + (_mask_ip(local) if private else local))
     except Exception:
         pass
     print(c(C.DIM, "  scanned at: ") + datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"))
+    if private:
+        print(c(C.DIM, "  (private mode — set CYBERDECK_PRIVATE=0 to reveal full details)"))
 
 # ── weather ─────────────────────────────────────────────────────────────
 def cmd_weather():
+    private = os.environ.get("CYBERDECK_PRIVATE", "") == "1"
     header("WEATHER  ·  live")
     ip = get_public_ip()
     try:
         d = fetch(f"https://ipapi.co/{ip}/json/").json()
         lat, lon = d.get("latitude"), d.get("longitude")
         city = d.get("city", "your location")
+        region = d.get("region", "")
     except Exception:
-        lat, lon, city = 40.7128, -74.006, "New York (default)"
+        lat, lon, city, region = 40.7128, -74.006, "New York", "NY (default)"
     try:
         w = fetch(f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true").json()
         cw = w.get("current_weather", {})
@@ -123,7 +146,10 @@ def cmd_weather():
         wind = cw.get("windspeed")
         code = cw.get("weathercode")
         desc = WMO.get(code, "unknown")
-        print(c(C.GREEN, "  location  : ") + f"{city} ({lat:.2f}, {lon:.2f})")
+        if private:
+            print(c(C.GREEN, "  location  : ") + f"{region} ({_mask_coord(lat)}, {_mask_coord(lon)})")
+        else:
+            print(c(C.GREEN, "  location  : ") + f"{city} ({lat:.2f}, {lon:.2f})")
         print(c(C.YELLOW, "  temperature: ") + f"{temp}°C")
         print(c(C.CYAN, "  condition : ") + desc)
         print(c(C.CYAN, "  wind      : ") + f"{wind} km/h")
@@ -532,7 +558,8 @@ def main():
         for name, (desc, _) in COMMANDS.items():
             print(f"  {c(C.GREEN, name.ljust(10))} {desc}")
         print(f"  {c(C.GREEN, 'sudo <cmd>').ljust(13)} the classic")
-        print(c(C.DIM, "\n  NO_COLOR=1 cyberdeck   disable colors"))
+        print(c(C.DIM, "\n  NO_COLOR=1 cyberdeck         disable colors"))
+        print(c(C.DIM, "  CYBERDECK_PRIVATE=1 cyberdeck  mask IP + location (for screenshots)"))
         return
     if cmd == "sudo":
         cmd_sudo(args[1:])
