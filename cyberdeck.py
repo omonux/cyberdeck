@@ -294,6 +294,176 @@ def cmd_stats():
         pass
     print(c(C.DIM, "  whoami    : ") + os.environ.get("USER", "?"))
 
+# ── phone lookup ────────────────────────────────────────────────────────
+# Nigerian carrier prefixes (real, by first 3 digits after country code)
+NG_CARRIERS = {
+    "803": "MTN", "813": "MTN", "903": "MTN", "913": "MTN", "701": "MTN",
+    "703": "MTN", "804": "MTN", "814": "MTN", "904": "MTN", "914": "MTN",
+    "802": "Airtel", "812": "Airtel", "902": "Airtel", "912": "Airtel", "702": "Airtel",
+    "806": "Glo", "816": "Glo", "906": "Glo", "916": "Glo", "706": "Glo",
+    "805": "9mobile", "815": "9mobile", "905": "9mobile", "915": "9mobile", "705": "9mobile",
+}
+
+def _extract_phone_from_text(text):
+    """Extract phone numbers from raw text (OCR output)."""
+    import re
+    # find sequences that look like phone numbers (7-15 digits, optional +)
+    candidates = re.findall(r'[\+]?[\d][\d\s\-()]{6,18}[\d]', text)
+    for cand in candidates:
+        digits = re.sub(r'[^\d+]', '', cand)
+        if len(digits) >= 7 and len(digits) <= 15:
+            return digits
+    return None
+
+def _ocr_image(path):
+    """Extract text from image using tesseract."""
+    try:
+        import pytesseract
+        from PIL import Image
+        img = Image.open(path)
+        # upscale small images for better OCR
+        if img.width < 400:
+            img = img.resize((img.width * 3, img.height * 3), Image.LANCZOS)
+        text = pytesseract.image_to_string(img)
+        return text
+    except ImportError:
+        print(c(C.YELLOW, "  [!] pytesseract not installed — pip install pytesseract"))
+        return None
+    except Exception as e:
+        print(c(C.RED, f"  [!] OCR error: {e}"))
+        return None
+
+def _lookup_phone(raw_number):
+    """Look up a phone number. Returns dict with all available info."""
+    import re
+    # normalize: strip non-digits except leading +
+    digits = re.sub(r'[^\d]', '', raw_number.lstrip('+'))
+    has_plus = raw_number.lstrip().startswith('+')
+
+    # Handle Nigerian local formats: 0803... / 803... → +234803...
+    if not has_plus and not digits.startswith("234"):
+        if digits.startswith("0") and len(digits) == 11:
+            digits = "234" + digits[1:]  # 0803... → 234803...
+        elif len(digits) == 10 and digits[0] in "897":
+            digits = "234" + digits  # 803... → 234803...
+
+    result = {"raw": raw_number, "number": digits, "country": None, "carrier": None,
+              "type": None, "valid": None, "name": None, "location": None,
+              "line_type": None, "status": None}
+
+    # Nigerian number?
+    if digits.startswith("234") and len(digits) == 13:
+        result["country"] = "Nigeria (NG)"
+        local = digits[3:]  # after country code
+        result["carrier"] = NG_CARRIERS.get(local[:3], "Unknown")
+        result["type"] = "Mobile"
+        result["valid"] = len(local) == 10 and local.isdigit()
+        result["line_type"] = "Prepaid/Postpaid"
+        result["status"] = "Active format" if result["valid"] else "Invalid format"
+    elif digits.startswith("1") and len(digits) == 11:
+        result["country"] = "USA/Canada (US/CA)"
+        result["type"] = "Mobile/Landline"
+        result["valid"] = True
+        result["line_type"] = "Unknown"
+        result["status"] = "Valid format"
+    elif len(digits) >= 7:
+        result["country"] = "International"
+        result["type"] = "Unknown"
+        result["valid"] = len(digits) <= 15
+        result["line_type"] = "Unknown"
+        result["status"] = "Valid format" if result["valid"] else "Invalid"
+    else:
+        result["valid"] = False
+        result["status"] = "Too short"
+
+    # Optional: numverify API for full name + location (needs free key)
+    api_key = os.environ.get("NUMVERIFY_KEY", "").strip()
+    if api_key and result["valid"]:
+        try:
+            url = f"https://numverify.com/api/v2/number_verification?number={digits}&api_key={api_key}"
+            r = fetch(url, timeout=10)
+            data = r.json()
+            if data.get("valid"):
+                result["name"] = data.get("name") or None
+                result["location"] = f"{data.get('location','')}".strip() or None
+                result["line_type"] = data.get("line_type") or result["line_type"]
+                result["status"] = data.get("carrier") or result["status"]
+                if data.get("country_name"):
+                    result["country"] = data["country_name"]
+                if data.get("carrier"):
+                    result["carrier"] = data["carrier"]
+        except Exception:
+            pass
+
+    return result
+
+def _print_phone_result(res):
+    """Pretty-print phone lookup result."""
+    header("PHONE  ·  number recon")
+    print(c(C.CYAN, f"  number    : +{res['number']}"))
+    if res["country"]:
+        print(c(C.GREEN, f"  country   : ") + res["country"])
+    if res["carrier"]:
+        print(c(C.GREEN, f"  carrier   : ") + res["carrier"])
+    if res["type"]:
+        print(c(C.GREEN, f"  type      : ") + res["type"])
+    if res["line_type"]:
+        print(c(C.GREEN, f"  line      : ") + res["line_type"])
+    if res["status"]:
+        color = C.GREEN if "valid" in res["status"].lower() or "active" in res["status"].lower() else C.YELLOW
+        print(c(color, f"  status    : ") + res["status"])
+    if res["name"]:
+        print(c(C.BOLD + C.MAGENTA, f"  OWNER     : ") + res["name"])
+    if res["location"]:
+        print(c(C.BOLD + C.MAGENTA, f"  LOCATION  : ") + res["location"])
+    if not res["name"]:
+        print(c(C.DIM, "  name      : (set NUMVERIFY_KEY env for full name + location)"))
+    print()
+
+def cmd_phone(args):
+    """Phone number lookup — from arg, file, or image (OCR)."""
+    if not args:
+        print(c(C.RED, "  usage: cyberdeck phone <number|image.png>"))
+        print(c(C.DIM, "  or:     cyberdeck phone --file <image>"))
+        print(c(C.DIM, "  env:    NUMVERIFY_KEY=xxx  (free: numverify.com) for full name"))
+        return
+
+    target = args[0]
+
+    # Is it an image file?
+    if target.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.tiff', '.webp')):
+        print(c(C.DIM, f"  [ocr] reading {target}..."))
+        text = _ocr_image(target)
+        if text:
+            print(c(C.DIM, f"  [ocr] extracted: {text.strip()[:80]}"))
+            number = _extract_phone_from_text(text)
+            if number:
+                _print_phone_result(_lookup_phone(number))
+            else:
+                print(c(C.YELLOW, "  [!] no phone number found in image"))
+        return
+
+    # Is it a number?
+    if re.sub(r'[^\d+]', '', target).isdigit() or '+' in target:
+        _print_phone_result(_lookup_phone(target))
+        return
+
+    # Try as file path (text file with number)
+    if os.path.isfile(target):
+        with open(target) as f:
+            content = f.read()
+        number = _extract_phone_from_text(content)
+        if number:
+            _print_phone_result(_lookup_phone(number))
+        else:
+            print(c(C.YELLOW, "  [!] no phone number found in file"))
+        return
+
+    print(c(C.RED, f"  unknown input: {target}"))
+    print(c(C.DIM, "  pass a number, image file, or text file"))
+
+import re
+
 # ── full mode ───────────────────────────────────────────────────────────
 def full():
     cmd_logo()
@@ -334,6 +504,7 @@ COMMANDS = {
     "stats": ("your machine stats", cmd_stats),
     "matrix": ("matrix digital rain (5s)", cmd_matrix),
     "whois": ("domain recon: DNS, server, TLS cert", cmd_whois),
+    "phone": ("phone number recon: carrier, type, OCR from image", None),
 }
 
 def main():
@@ -352,6 +523,9 @@ def main():
         return
     if cmd == "sudo":
         cmd_sudo(args[1:])
+        return
+    if cmd == "phone":
+        cmd_phone(args[1:])
         return
     if cmd in COMMANDS:
         COMMANDS[cmd][2 if False else 1]()

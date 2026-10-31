@@ -60,6 +60,7 @@ python3 cyberdeck.py
 | `stats` | Your machine stats (OS, uptime, disk) |
 | `matrix` | Matrix digital rain (auto-stops in 5s) |
 | `whois <domain>` | Domain recon: DNS, server, TLS cert, headers |
+| `phone <number\|image>` | Phone recon: carrier, type, validity — **OCR from image** |
 | `sudo <anything>` | The classic easter egg 🥪 |
 | `--help` | Show all commands |
 
@@ -72,6 +73,7 @@ You're at a coffee shop, screen-recording, or just feeling edgy. You want your t
 - **Fake scan banner** — perfect for screenshots and "I'm hacking" moments
 - **Matrix rain** — the aesthetic, on demand
 - **Domain recon** — `whois github.com` → DNS records, server header, TLS cert, security headers in one shot
+- **Phone recon** — `cyberdeck phone +234803...` → carrier (MTN/Airtel/Glo/9mobile), type, validity. **Snap a pic** of a number and it OCRs it: `cyberdeck phone screenshot.png`
 - **Zero config** — no API keys, no setup, no YAML
 
 ## 📦 How it works

@@ -51,6 +51,7 @@ What's in it:
 - 💚 Matrix digital rain
 - 🔍 `cyberdeck whois <domain>` — DNS, server header, TLS cert, security headers in one command
 - 💻 System stats + rotating hacker quotes
+- 📱 **Phone recon** — `cyberdeck phone +234803...` → carrier, type, validity. **Snap a pic** of a number → OCR → full lookup
 - 🥪 `cyberdeck sudo make me a sandwich` — yes, really
 
 Run it with no args = full "hacker mode" (everything at once).
@@ -81,6 +82,7 @@ What it does:
 → Fake network scan banner (the screenshot-able part)
 → Matrix rain
 → Domain recon: DNS, TLS cert, security headers in one command
+→ Phone recon: type a number OR snap a pic → OCR → carrier, type, validity
 → Hacker quotes
 → `cyberdeck sudo make me a sandwich` 🥪
 
