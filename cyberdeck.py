@@ -307,6 +307,23 @@ def full():
     print(c(C.BOLD + C.GREEN, "  ═══ CYBERDECK online. You're invisible. ═══"))
     print(c(C.DIM, "  run 'cyberdeck --help' for individual tools"))
 
+# ── sudo easter egg ─────────────────────────────────────────────────────
+def cmd_sudo(rest):
+    """The classic: `cyberdeck sudo <anything>`."""
+    arg = " ".join(rest).strip() or "make me a sandwich"
+    print()
+    print(c(C.YELLOW, f"  $ cyberdeck sudo {arg}"))
+    print()
+    if os.geteuid() == 0:
+        print(c(C.GREEN, "  [sudo] password for root: ********"))
+        print(c(C.GREEN, f"  ✓ {arg} — done. (you were already root, obviously)"))
+    else:
+        user = os.environ.get("USER", "you")
+        print(c(C.RED, f"  [sudo] password for {user}: ********"))
+        print(c(C.RED, f"  {user} is not in the sudoers file. This incident will be reported."))
+        print(c(C.DIM, "  (try: sudo cyberdeck sudo " + arg + ")"))
+    print()
+
 # ── main ────────────────────────────────────────────────────────────────
 COMMANDS = {
     "weather": ("live weather for your IP", cmd_weather),
@@ -330,7 +347,11 @@ def main():
         print(c(C.WHITE, "  (no args)     full hacker mode\n"))
         for name, (desc, _) in COMMANDS.items():
             print(f"  {c(C.GREEN, name.ljust(10))} {desc}")
+        print(f"  {c(C.GREEN, 'sudo <cmd>').ljust(13)} the classic")
         print(c(C.DIM, "\n  NO_COLOR=1 cyberdeck   disable colors"))
+        return
+    if cmd == "sudo":
+        cmd_sudo(args[1:])
         return
     if cmd in COMMANDS:
         COMMANDS[cmd][2 if False else 1]()

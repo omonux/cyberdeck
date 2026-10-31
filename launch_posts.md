@@ -21,6 +21,7 @@ What it does:
 - Domain recon: `cyberdeck whois github.com` → DNS records, server header, TLS cert, security headers
 - System stats (uptime, disk, load)
 - Rotating hacker quotes
+- `cyberdeck sudo make me a sandwich` — yes, really
 
 Run it with no args and it does all of it at once. That's the "hacker mode."
 
@@ -50,6 +51,7 @@ What's in it:
 - 💚 Matrix digital rain
 - 🔍 `cyberdeck whois <domain>` — DNS, server header, TLS cert, security headers in one command
 - 💻 System stats + rotating hacker quotes
+- 🥪 `cyberdeck sudo make me a sandwich` — yes, really
 
 Run it with no args = full "hacker mode" (everything at once).
 
@@ -80,6 +82,7 @@ What it does:
 → Matrix rain
 → Domain recon: DNS, TLS cert, security headers in one command
 → Hacker quotes
+→ `cyberdeck sudo make me a sandwich` 🥪
 
 3/
 Run it with no args = full hacker mode. Everything at once.

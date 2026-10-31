@@ -60,6 +60,7 @@ python3 cyberdeck.py
 | `stats` | Your machine stats (OS, uptime, disk) |
 | `matrix` | Matrix digital rain (auto-stops in 5s) |
 | `whois <domain>` | Domain recon: DNS, server, TLS cert, headers |
+| `sudo <anything>` | The classic easter egg 🥪 |
 | `--help` | Show all commands |
 
 ## 💡 Why
