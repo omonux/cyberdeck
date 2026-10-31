@@ -159,6 +159,84 @@ def cmd_scan():
     print()
     print(c(C.BOLD + C.RED, f"  {len(open_ports)} open port(s) found. You've been seen."))
 
+# ── matrix rain ─────────────────────────────────────────────────────────
+def cmd_matrix():
+    """Matrix digital rain — runs for a few seconds then exits."""
+    import time
+    cols = 60
+    chars = "アイウエオカキクケコサシスセソ0123456789ABCDEF"
+    drops = [random.randint(0, 20) for _ in range(cols)]
+    print(c(C.DIM, "  matrix mode — ctrl+c to exit (auto-stops in 5s)"))
+    end = time.time() + 5
+    frame = 0
+    while time.time() < end:
+        out = []
+        for i in range(cols):
+            ch = random.choice(chars)
+            # head of the drop is bright, tail fades
+            out.append(c(C.GREEN, ch))
+        print("\033[1A" + "".join(out))
+        frame += 1
+        time.sleep(0.05)
+    print(c(C.DIM, "  matrix off"))
+
+# ── whois ───────────────────────────────────────────────────────────────
+def cmd_whois():
+    header("WHOIS  ·  domain recon")
+    domain = sys.argv[2] if len(sys.argv) > 2 else "remotiva.site"
+    print(c(C.DIM, f"  target: {domain}\n"))
+    # DNS
+    try:
+        ips = socket.getaddrinfo(domain, None)
+        addrs = sorted({a[4][0] for a in ips})
+        print(c(C.GREEN, "  ip        : ") + ", ".join(addrs[:5]))
+    except Exception as e:
+        print(c(C.YELLOW, "  ip        : ") + f"unresolved ({e})")
+    # reverse DNS
+    for ip in (addrs if 'addrs' in dir() else []):
+        try:
+            host = socket.gethostbyaddr(ip)
+            print(c(C.GREEN, "  reverse   : ") + f"{ip} → {host[0]}")
+            break
+        except Exception:
+            pass
+    # HTTP headers
+    try:
+        r = fetch(f"https://{domain}", timeout=8)
+        server = r.headers.get("Server", "?")
+        print(c(C.GREEN, "  server    : ") + server)
+        print(c(C.GREEN, "  status    : ") + str(r.status_code))
+        print(c(C.GREEN, "  http→https: ") + ("yes" if "location" in {k.lower() for k in r.headers} or r.status_code in (301,302) else "direct"))
+    except Exception:
+        try:
+            r = fetch(f"http://{domain}", timeout=8)
+            print(c(C.GREEN, "  server    : ") + r.headers.get("Server", "?"))
+            print(c(C.GREEN, "  status    : ") + str(r.status_code))
+        except Exception as e:
+            print(c(C.YELLOW, "  http      : ") + f"unreachable ({e})")
+    # TLS cert
+    try:
+        import ssl, socket as sk
+        ctx = ssl.create_default_context()
+        with sk.create_connection((domain, 443), timeout=8) as sock:
+            with ctx.wrap_socket(sock, server_hostname=domain) as s:
+                cert = s.getpeercert()
+                for k, v in cert.get("subject", ()):
+                    if k == "commonName":
+                        print(c(C.GREEN, "  cert cn   : ") + str(v))
+                if "notAfter" in cert:
+                    print(c(C.GREEN, "  cert exp  : ") + cert["notAfter"])
+                issuer = ""
+                for rdn in cert.get("issuer", ()):
+                    for k, v in rdn:
+                        if k == "organizationName":
+                            issuer = str(v)
+                if issuer:
+                    print(c(C.GREEN, "  cert ca   : ") + issuer)
+    except Exception as e:
+        print(c(C.YELLOW, "  tls       : ") + f"n/a ({e})")
+    print(c(C.DIM, "  (full whois: install `whois` and run: whois " + domain + ")"))
+
 # ── quotes ──────────────────────────────────────────────────────────────
 QUOTES = [
     ("Everything fails all the time.", "Linus Torvalds"),
@@ -224,6 +302,7 @@ def full():
     cmd_ip()
     cmd_weather()
     cmd_scan()
+    cmd_whois()
     print()
     print(c(C.BOLD + C.GREEN, "  ═══ CYBERDECK online. You're invisible. ═══"))
     print(c(C.DIM, "  run 'cyberdeck --help' for individual tools"))
@@ -236,6 +315,8 @@ COMMANDS = {
     "scan": ("fake network scan banner", cmd_scan),
     "quote": ("random hacker quote", cmd_quote),
     "stats": ("your machine stats", cmd_stats),
+    "matrix": ("matrix digital rain (5s)", cmd_matrix),
+    "whois": ("domain recon: DNS, server, TLS cert", cmd_whois),
 }
 
 def main():

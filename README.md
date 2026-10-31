@@ -18,6 +18,8 @@ CYBERDECK turns your terminal into a hacker's cockpit — live weather for your 
 
 ## ✨ Demo
 
+![cyberdeck demo](demo.gif)
+
 ```
  ██████╗ ██████╗ ██████╗ ███████╗███╗   ██╗ ██████╗
 ██╔════╝██╔═══██╗██╔══██╗██╔════╝████╗  ██║██╔═══██╗
@@ -56,6 +58,8 @@ python3 cyberdeck.py
 | `scan` | Fake network scan banner (for vibes) |
 | `quote` | Random hacker quote |
 | `stats` | Your machine stats (OS, uptime, disk) |
+| `matrix` | Matrix digital rain (auto-stops in 5s) |
+| `whois <domain>` | Domain recon: DNS, server, TLS cert, headers |
 | `--help` | Show all commands |
 
 ## 💡 Why
@@ -65,6 +69,8 @@ You're at a coffee shop, screen-recording, or just feeling edgy. You want your t
 - **Live IP geolocation** — see exactly where your connection exits
 - **Live weather** — because hackers need to know if it's raining at the server farm
 - **Fake scan banner** — perfect for screenshots and "I'm hacking" moments
+- **Matrix rain** — the aesthetic, on demand
+- **Domain recon** — `whois github.com` → DNS records, server header, TLS cert, security headers in one shot
 - **Zero config** — no API keys, no setup, no YAML
 
 ## 📦 How it works
